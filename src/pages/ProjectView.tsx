@@ -7,7 +7,6 @@ import { ASSET_STATUSES, MEDIA_KINDS } from '../types'
 import { fmtRelative, ASSET_STATUS_META } from '../lib/labels'
 import { KIND_LABEL, UPLOAD_KINDS_LABEL } from '../lib/media'
 import {
-  exportAsset,
   exportProjectZip,
   exportAssetsZip,
   exportAssetLatestFile,
@@ -590,8 +589,17 @@ function AssetMenu({ asset, onMove }: { asset: Asset; onMove: () => void }) {
             이름 변경
           </button>
           <button onClick={() => { setOpen(false); onMove() }}>다른 프로젝트로 이동</button>
-          <button onClick={() => { setOpen(false); exportAsset(asset.id) }}>
-            <IconDownload size={13} /> 번들 내보내기
+          <button
+            onClick={async () => {
+              setOpen(false)
+              try {
+                await exportAssetLatestFile(asset.id)
+              } catch (e) {
+                alert(e instanceof Error ? e.message : String(e))
+              }
+            }}
+          >
+            <IconDownload size={13} /> 파일 다운로드
           </button>
           <button
             className="danger"
