@@ -637,12 +637,15 @@ function AssetCard({
           assetId={asset.id}
           scrub
         />
-        <div className="asset-card-select">
-          <SelectBox checked={selected} onToggle={onToggle} />
-        </div>
-        <div className="asset-card-actions" onClick={(e) => e.stopPropagation()}>
-          <AssetMenu asset={asset} onMove={onMove} />
-        </div>
+      </div>
+      {/* select + menu live OUTSIDE .asset-thumb so the hover-scrub layer can't
+          cover them and the menu dropdown isn't clipped by the thumb's
+          overflow:hidden. */}
+      <div className="asset-card-select">
+        <SelectBox checked={selected} onToggle={onToggle} />
+      </div>
+      <div className="asset-card-actions" onClick={(e) => e.stopPropagation()}>
+        <AssetMenu asset={asset} onMove={onMove} />
       </div>
       <div className="asset-info">
         <div className="asset-name">{asset.name}</div>
