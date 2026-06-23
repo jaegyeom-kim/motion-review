@@ -5,7 +5,7 @@ import { useStore } from '../store/useStore'
 import type { Asset, AssetStatus, MediaKind } from '../types'
 import { ASSET_STATUSES, MEDIA_KINDS } from '../types'
 import { fmtRelative, ASSET_STATUS_META } from '../lib/labels'
-import { KIND_LABEL } from '../lib/media'
+import { KIND_LABEL, UPLOAD_KINDS_LABEL } from '../lib/media'
 import {
   exportAsset,
   exportProjectZip,
@@ -230,7 +230,7 @@ export function ProjectView() {
           <div className="drop-hint-inner">
             <IconUpload size={34} />
             <div className="drop-hint-text">여기에 놓아 업로드</div>
-            <div className="muted">Lottie · 이미지 · 비디오 · PDF · 오디오</div>
+            <div className="muted">{UPLOAD_KINDS_LABEL}</div>
           </div>
         </div>
       )}

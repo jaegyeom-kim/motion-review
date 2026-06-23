@@ -1,5 +1,11 @@
 import { parseLottieFile, renderThumbnail } from './lottie'
+import { cloudEnabled } from './supabase'
 import { MEDIA_KINDS, type LottieMeta, type MediaKind } from '../types'
+
+/** The shared cloud server is on a small free tier, so video (large files,
+ *  high storage/bandwidth cost) is blocked for now — "추후 지원 예정". Local
+ *  (IndexedDB) mode keeps full video support since it costs nothing. */
+export const VIDEO_UPLOAD_DISABLED = cloudEnabled
 
 /** Extension → kind map. `.json` is treated as Lottie (validated on parse). */
 const EXT: Record<MediaKind, string[]> = {
@@ -10,11 +16,23 @@ const EXT: Record<MediaKind, string[]> = {
   audio: ['mp3', 'm4a', 'aac', 'wav', 'ogg', 'oga', 'flac'],
 }
 
-/** Accept attribute for file inputs across every supported kind. */
-export const ACCEPT_ALL =
-  '.json,.lottie,.dotlottie,.png,.jpg,.jpeg,.webp,.gif,.svg,.avif,.bmp,' +
-  '.mp4,.webm,.mov,.m4v,.ogv,.pdf,.mp3,.m4a,.aac,.wav,.ogg,.oga,.flac,' +
-  'image/*,video/*,audio/*,application/pdf,application/json'
+/** Accept attribute for file inputs across every supported kind. Video
+ *  extensions/MIME are omitted while video upload is disabled. */
+export const ACCEPT_ALL = [
+  '.json,.lottie,.dotlottie,.png,.jpg,.jpeg,.webp,.gif,.svg,.avif,.bmp',
+  VIDEO_UPLOAD_DISABLED ? '' : '.mp4,.webm,.mov,.m4v,.ogv',
+  '.pdf,.mp3,.m4a,.aac,.wav,.ogg,.oga,.flac',
+  'image/*',
+  VIDEO_UPLOAD_DISABLED ? '' : 'video/*',
+  'audio/*,application/pdf,application/json',
+]
+  .filter(Boolean)
+  .join(',')
+
+/** Human-readable list of uploadable kinds (drop hints), minus video when off. */
+export const UPLOAD_KINDS_LABEL = VIDEO_UPLOAD_DISABLED
+  ? 'Lottie · 이미지 · PDF · 오디오'
+  : 'Lottie · 이미지 · 비디오 · PDF · 오디오'
 
 export const KIND_LABEL: Record<MediaKind, string> = {
   lottie: 'Lottie',
@@ -53,6 +71,10 @@ export interface ParsedMedia {
 export async function parseMedia(file: File): Promise<ParsedMedia> {
   const kind = detectKind(file)
   if (!kind) throw new MediaParseError('지원하지 않는 파일 형식입니다.')
+  if (kind === 'video' && VIDEO_UPLOAD_DISABLED)
+    throw new MediaParseError(
+      '비디오 업로드는 현재 지원하지 않습니다. (서버 용량 문제로 추후 지원 예정)',
+    )
 
   if (kind === 'lottie') {
     const { data, meta } = await parseLottieFile(file)

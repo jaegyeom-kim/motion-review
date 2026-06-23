@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { fmtBytes, fmtDuration } from '../lib/labels'
-import { ACCEPT_ALL, KIND_LABEL, type ParsedMedia } from '../lib/media'
+import { ACCEPT_ALL, KIND_LABEL, UPLOAD_KINDS_LABEL, type ParsedMedia } from '../lib/media'
 import { IconUpload, IconCheck } from './Icon'
 
 export function FileDrop({
@@ -74,7 +74,7 @@ export function FileDrop({
               파일을 드롭하거나 클릭해서 선택
             </div>
             <div className="muted" style={{ fontSize: 12 }}>
-              Lottie · 이미지 · 비디오 · PDF · 오디오
+              {UPLOAD_KINDS_LABEL}
             </div>
           </>
         )}
