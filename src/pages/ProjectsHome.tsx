@@ -37,7 +37,7 @@ export function ProjectsHome() {
     <div className="app">
       <div className="topbar">
         <div className="brand">
-          <img src="/favicon.svg" alt="" />
+          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" />
           Motion Review
         </div>
         <span className="muted" style={{ fontSize: 12.5 }}>
