@@ -190,6 +190,12 @@ export const IconMore = ({ size = 18, className }: P) => (
     <circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none" />
   </svg>
 )
+export const IconEdit = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+  </svg>
+)
 export const IconBell = ({ size = 18, className }: P) => (
   <svg {...base(size, className)}>
     <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Comment } from '../types'
-import { COMMENT_STATUSES } from '../types'
+import type { Comment, CommentTag } from '../types'
+import { COMMENT_STATUSES, COMMENT_TAGS } from '../types'
 import { useStore } from '../store/useStore'
-import { STATUS_META, fmtRelative, fmtTimecode } from '../lib/labels'
+import { STATUS_META, TAG_META, fmtRelative, fmtTimecode } from '../lib/labels'
 import { TagBadge } from './Badges'
-import { IconChat, IconTrash, IconLayers, IconClock } from './Icon'
+import { IconChat, IconTrash, IconLayers, IconClock, IconEdit, IconCheck, IconClose } from './Icon'
 
 export function CommentCard({
   comment,
@@ -23,9 +23,26 @@ export function CommentCard({
   const setStatus = useStore((s) => s.setCommentStatus)
   const addReply = useStore((s) => s.addReply)
   const removeComment = useStore((s) => s.removeComment)
+  const updateCommentBody = useStore((s) => s.updateCommentBody)
+  const setCommentTag = useStore((s) => s.setCommentTag)
   const [reply, setReply] = useState('')
   const [showReply, setShowReply] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [draftBody, setDraftBody] = useState(comment.body)
+  const [draftTag, setDraftTag] = useState<CommentTag>(comment.tag)
   const ref = useRef<HTMLDivElement>(null)
+
+  const startEdit = () => {
+    setDraftBody(comment.body)
+    setDraftTag(comment.tag)
+    setEditing(true)
+  }
+  const saveEdit = () => {
+    const b = draftBody.trim()
+    if (b && b !== comment.body) void updateCommentBody(comment.id, b)
+    if (draftTag !== comment.tag) void setCommentTag(comment.id, draftTag)
+    setEditing(false)
+  }
 
   // When this card becomes selected (e.g. by clicking its pin on the canvas),
   // scroll it into view so "go to comment" reveals it in the panel.
@@ -50,9 +67,37 @@ export function CommentCard({
         >
           {comment.number}
         </span>
-        <TagBadge tag={comment.tag} />
+        {editing ? (
+          <select
+            className="tag-select"
+            value={draftTag}
+            style={{ color: TAG_META[draftTag].color, borderColor: `${TAG_META[draftTag].color}55` }}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => setDraftTag(e.target.value as CommentTag)}
+          >
+            {COMMENT_TAGS.map((t) => (
+              <option key={t} value={t}>
+                {TAG_META[t].label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <TagBadge tag={comment.tag} />
+        )}
         <span className="spacer" />
         <span className="cmt-time muted">{fmtRelative(comment.createdAt)}</span>
+        {!editing && (
+          <button
+            className="mini-btn"
+            title="수정"
+            onClick={(e) => {
+              e.stopPropagation()
+              startEdit()
+            }}
+          >
+            <IconEdit size={13} />
+          </button>
+        )}
         <button
           className="mini-btn danger"
           title="삭제"
@@ -65,7 +110,31 @@ export function CommentCard({
         </button>
       </div>
 
-      <div className="cmt-body">{comment.body}</div>
+      {editing ? (
+        <div className="cmt-edit" onClick={(e) => e.stopPropagation()}>
+          <textarea
+            className="input cmt-edit-body"
+            value={draftBody}
+            autoFocus
+            rows={3}
+            onChange={(e) => setDraftBody(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit()
+              if (e.key === 'Escape') setEditing(false)
+            }}
+          />
+          <div className="cmt-edit-actions">
+            <button className="btn sm" onClick={() => setEditing(false)}>
+              <IconClose size={13} /> 취소
+            </button>
+            <button className="btn sm primary" onClick={saveEdit} disabled={!draftBody.trim()}>
+              <IconCheck size={13} /> 저장
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="cmt-body">{comment.body}</div>
+      )}
 
       <div className="cmt-anchor mono muted">
         {temporal ? (

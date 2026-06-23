@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { sendLoginCode, verifyLoginCode } from '../lib/auth'
+import { IconClose } from '../components/Icon'
 
 /** Email-OTP login. Step 1: enter email → a 6-digit code is mailed. Step 2:
  *  enter the code → session is created (the store's auth listener takes over).
- *  Signups are closed: unknown emails are rejected by the backend. */
-export function Login() {
+ *  Signups are closed: unknown emails are rejected by the backend.
+ *  `onClose` is passed only in hybrid mode (dismissible overlay); the hard
+ *  gate renders it without one so it can't be dismissed. */
+export function Login({ onClose }: { onClose?: () => void }) {
   const [step, setStep] = useState<'email' | 'code'>('email')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
@@ -51,8 +54,16 @@ export function Login() {
   }
 
   return (
-    <div className="login-screen">
+    <div
+      className={`login-screen ${onClose ? 'as-modal' : ''}`}
+      onMouseDown={onClose ? (e) => e.target === e.currentTarget && onClose() : undefined}
+    >
       <div className="login-card">
+        {onClose && (
+          <button className="login-close" onClick={onClose} title="닫기">
+            <IconClose size={16} />
+          </button>
+        )}
         <div className="login-brand">
           <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" />
           <span>Motion Review</span>

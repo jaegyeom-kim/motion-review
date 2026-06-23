@@ -8,18 +8,27 @@ const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
 export const cloudEnabled = !!(url && anonKey)
 
-// Auth gate. When on, the app requires a logged-in member (magic-link) and the
-// backend RLS is locked to the `authenticated` role. Off by default so the
-// live anonymous link-share workspace keeps working until we flip both this
-// flag AND apply schema-auth.sql together (the coordinated cutover).
+// Auth modes (cloud only):
+//   VITE_REQUIRE_AUTH=true  → login REQUIRED. The whole app is gated and RLS is
+//                             locked to `authenticated` (apply schema-auth.sql).
+//   VITE_AUTH_OPTIONAL=true → HYBRID. Anonymous link-share still works, but
+//                             anyone who logs in gets a profile + notifications.
+//                             RLS keeps anon open (apply schema-auth-hybrid.sql).
+//   neither                 → pure anonymous link-share (current live behavior).
 export const requireAuth =
   cloudEnabled && (import.meta.env.VITE_REQUIRE_AUTH as string | undefined) === 'true'
 
+// Auth *features* (login UI, profiles, bell, admin) are available whenever auth
+// is required OR optional. The difference is only whether the app is gated.
+export const authEnabled =
+  requireAuth ||
+  (cloudEnabled && (import.meta.env.VITE_AUTH_OPTIONAL as string | undefined) === 'true')
+
 export const supabase: SupabaseClient | null = cloudEnabled
   ? createClient(url!, anonKey!, {
-      // persist the session (localStorage) so magic-link logins survive reloads
-      // once auth is on. Harmless when auth is off (no session is ever created).
-      auth: { persistSession: requireAuth, autoRefreshToken: requireAuth },
+      // persist the session (localStorage) so logins survive reloads once auth
+      // is on. Harmless when auth is off (no session is ever created).
+      auth: { persistSession: authEnabled, autoRefreshToken: authEnabled },
       realtime: { params: { eventsPerSecond: 5 } },
     })
   : null

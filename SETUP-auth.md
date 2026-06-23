@@ -1,7 +1,19 @@
 # 로그인 + 멤버관리 + 댓글 알림 — 켜는 법
 
-코드는 전부 들어가 있고 **꺼져 있다**(`VITE_REQUIRE_AUTH`가 없으면 지금처럼 익명 링크공유로 동작).
-아래 단계를 끝내고 마지막에 플래그를 켜면 한 번에 전환된다.
+코드는 전부 들어가 있고 **꺼져 있다**(플래그가 없으면 지금처럼 익명 링크공유로 동작).
+아래 단계를 끝내고 마지막에 플래그를 켜면 전환된다.
+
+## 모드 두 가지 — 먼저 고르기
+
+| 모드 | 플래그 | 익명 링크 입장 | 스키마 | 누가 알림 받나 |
+|------|--------|:---:|--------|------|
+| **하이브리드** (추천 — 임시 전환용) | `VITE_AUTH_OPTIONAL=true` | ✅ 유지 | `schema-auth-hybrid.sql` | 로그인한 멤버 |
+| **로그인 필수** | `VITE_REQUIRE_AUTH=true` | ❌ 차단 | `schema-auth.sql` | 로그인한 멤버 |
+
+- **하이브리드**: 링크 아는 사람은 지금처럼 익명으로 들어와 보고 댓글 단다. 로그인하면 프로필·알림이 붙는다. RLS는 익명 개방 유지(데이터 안 잠금).
+- **로그인 필수**: 전체 게이트. 멤버만 접근. RLS authenticated 잠금.
+
+1~4단계는 두 모드 공통. **5·7단계만 모드별로 다르다**(각 단계에 표시).
 
 대시보드/CLI 작업(=내가 못 하는 것)만 모았다. 순서대로.
 
@@ -78,12 +90,14 @@ supabase secrets set \
 
 ---
 
-## 5. 스키마 컷오버 (RLS 잠그기)
+## 5. 스키마 적용 — 모드별
 
-> ⚠️ 이 단계부터 **익명 접속이 막힌다.** 로그인 안 하면 못 들어옴. 1~4 끝낸 뒤 실행.
+대시보드 **SQL Editor**에 붙여넣고 Run:
 
-대시보드 **SQL Editor**에 `supabase/schema-auth.sql` **전체 붙여넣고 Run.**
-(profiles / project_members / notifications 생성 + 모든 테이블 authenticated 전용 + media 버킷 비공개 + Realtime 추가.)
+- **하이브리드** → `supabase/schema-auth-hybrid.sql`
+  (profiles / project_members / notifications만 추가. 데이터 테이블·버킷은 익명 개방 유지 → **링크 입장 그대로**.)
+- **로그인 필수** → `supabase/schema-auth.sql`
+  > ⚠️ 이 단계부터 **익명 접속이 막힌다.** (모든 테이블 authenticated 전용 + media 버킷 비공개.)
 
 ---
 
@@ -104,15 +118,20 @@ where email = 'gyeomotion@vinylc.com';
 
 ---
 
-## 7. 플래그 켜고 배포
+## 7. 플래그 켜고 배포 — 모드별
 
 `.env.production` 에 한 줄 추가:
 
-```
-VITE_REQUIRE_AUTH=true
-```
+- **하이브리드** (링크 입장 유지):
+  ```
+  VITE_AUTH_OPTIONAL=true
+  ```
+- **로그인 필수**:
+  ```
+  VITE_REQUIRE_AUTH=true
+  ```
 
-`git push` → GitHub Actions 자동 빌드 → 이제 사이트가 **로그인 필수**로 전환.
+`git push` → GitHub Actions 자동 빌드 → 전환 완료. (하이브리드는 우상단에 **로그인** 버튼이 생기고, 익명도 그대로 입장된다.)
 
 ---
 
@@ -128,5 +147,5 @@ VITE_REQUIRE_AUTH=true
 - 전부 **0원**.
 
 ## 되돌리기
-`.env.production`에서 `VITE_REQUIRE_AUTH` 줄 지우고 push → 다시 익명 모드.
-(데이터 테이블 RLS는 `supabase/schema.sql` 다시 Run하면 익명 허용으로 복구.)
+`.env.production`에서 `VITE_AUTH_OPTIONAL` / `VITE_REQUIRE_AUTH` 줄 지우고 push → 다시 순수 익명 모드.
+(로그인 필수였다면 데이터 테이블 RLS는 `supabase/schema.sql` 다시 Run해서 익명 허용으로 복구. 하이브리드는 RLS를 안 건드렸으니 복구 불필요.)

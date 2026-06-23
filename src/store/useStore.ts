@@ -19,7 +19,7 @@ import type {
 import * as db from '../lib/backend'
 import * as cloud from '../lib/cloud'
 import * as auth from '../lib/auth'
-import { supabase, cloudEnabled, requireAuth } from '../lib/supabase'
+import { supabase, cloudEnabled, requireAuth, authEnabled } from '../lib/supabase'
 import { newId } from '../lib/ids'
 import { renderThumbnail, cloneAnimationData } from '../lib/lottie'
 import { parseMedia } from '../lib/media'
@@ -214,7 +214,7 @@ export const useStore = create<State>((set, get) => ({
     }
     // In auth mode, the display name/color live on the profile too.
     const { profile } = get()
-    if (requireAuth && profile) {
+    if (authEnabled && profile) {
       const updated: Profile = { ...profile, name: author, color }
       set((s) => ({
         profile: updated,
@@ -226,8 +226,8 @@ export const useStore = create<State>((set, get) => ({
 
   // ---- auth ----
   initAuth: () => {
-    // Local or anonymous-cloud mode: no auth gate — load data straight away.
-    if (!requireAuth) {
+    // No auth features (local, or pure anonymous cloud): load data straight away.
+    if (!authEnabled) {
       set({ authReady: true })
       void get().init()
       return
@@ -247,27 +247,32 @@ export const useStore = create<State>((set, get) => ({
     const nextId = session?.user.id ?? null
 
     if (!session) {
-      // logged out — tear down workspace + realtime, show the login screen.
+      // signed out / never signed in. Tear down per-user state + channels.
       if (notifChannel && supabase) {
         void supabase.removeChannel(notifChannel)
         notifChannel = null
       }
-      if (rtChannel && supabase) {
-        void supabase.removeChannel(rtChannel)
-        rtChannel = null
-      }
-      initOnce = null
       set({
         session: null,
         profile: null,
         members: [],
         projectMembers: [],
         notifications: [],
-        projects: [],
-        assets: [],
-        ready: false,
         authReady: true,
       })
+      if (requireAuth) {
+        // hard gate: drop the workspace + grid realtime, show the login screen.
+        if (rtChannel && supabase) {
+          void supabase.removeChannel(rtChannel)
+          rtChannel = null
+        }
+        initOnce = null
+        set({ projects: [], assets: [], ready: false })
+      } else {
+        // hybrid: keep the anonymous workspace alive (load it if needed).
+        await get().init()
+        get().startRealtime()
+      }
       return
     }
 
@@ -297,7 +302,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   refreshMembers: async () => {
-    if (!requireAuth) return
+    if (!authEnabled) return
     const [members, projectMembers] = await Promise.all([
       cloud.getProfiles(),
       cloud.getAllProjectMembers(),
@@ -1057,7 +1062,7 @@ type SetFn = (updater: (s: State) => Partial<State>) => void
 /** Subscribe to the current user's notification inserts so the bell + toaster
  *  update live (auth mode). Filtered server-side by user_id. */
 function startNotifRealtime(set: SetFn, get: () => State) {
-  if (!requireAuth || !supabase || notifChannel) return
+  if (!authEnabled || !supabase || notifChannel) return
   const uid = get().session?.user.id
   if (!uid) return
   notifChannel = supabase

@@ -2490,3 +2490,48 @@
 .assign-chip.on { background: var(--accent-soft); border-color: #7c6cff66; color: var(--text); }
 .assign-dot { width: 8px; height: 8px; border-radius: 50%; }
 .admin-note { font-size: 12px; margin-top: 14px; }
+
+/* login used as a dismissible overlay (hybrid optional mode) */
+.login-screen.as-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(7, 8, 11, 0.72);
+  backdrop-filter: blur(3px);
+}
+.login-card { position: relative; }
+.login-close {
+  position: absolute;
+  top: 12px; right: 12px;
+  background: none; border: none;
+  color: var(--text-3);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+}
+.login-close:hover { color: var(--text); background: var(--bg-2); }
+
+/* comment inline edit (body + tag) */
+.tag-select {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.cmt-edit { margin: 6px 0 2px; }
+.cmt-edit-body {
+  width: 100%;
+  resize: vertical;
+  min-height: 56px;
+  font: inherit;
+  line-height: 1.45;
+}
+.cmt-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}

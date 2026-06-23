@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { HashRouter, Routes, Route } from 'react-router-dom'
 import { useStore } from './store/useStore'
-import { requireAuth } from './lib/supabase'
+import { requireAuth, authEnabled } from './lib/supabase'
 import { ProjectsHome } from './pages/ProjectsHome'
 import { ProjectView } from './pages/ProjectView'
 import { Workspace } from './pages/Workspace'
@@ -18,8 +18,8 @@ export default function App() {
     initAuth()
   }, [initAuth])
 
-  // Auth gate (only when VITE_REQUIRE_AUTH is on). Until then the app runs
-  // exactly as before — anonymous link-share / local.
+  // Hard gate only when login is REQUIRED. In hybrid (optional) mode the app
+  // renders normally for anonymous visitors; login is offered, not forced.
   if (requireAuth) {
     if (!authReady) return <div className="loading">불러오는 중…</div>
     if (!session) return <Login />
@@ -27,7 +27,7 @@ export default function App() {
 
   return (
     <HashRouter>
-      {requireAuth && <NotificationToaster />}
+      {authEnabled && session && <NotificationToaster />}
       <Routes>
         <Route path="/" element={<ProjectsHome />} />
         <Route path="/project/:projectId" element={<ProjectView />} />
