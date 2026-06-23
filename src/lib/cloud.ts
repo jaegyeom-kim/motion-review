@@ -1,4 +1,15 @@
-import type { Asset, Branch, Version, Comment, LottieBlob, Project, ID } from '../types'
+import type {
+  Asset,
+  Branch,
+  Version,
+  Comment,
+  LottieBlob,
+  Project,
+  ID,
+  Profile,
+  ProjectMember,
+  AppNotification,
+} from '../types'
 import { supabase, MEDIA_BUCKET } from './supabase'
 
 // Cloud data layer (Supabase). Mirrors lib/db.ts's API exactly so the store
@@ -139,6 +150,75 @@ export async function importAll(payload: {
   for (const v of payload.versions) await putVersion(v)
   for (const c of payload.comments) await putComment(c)
   for (const blob of payload.blobs) await putBlob(blob)
+}
+
+// ============================================================================
+// Auth-mode tables: profiles, project_members, notifications.
+// All rows are jsonb documents (`data`) with a few denormalized columns.
+// ============================================================================
+
+// ---- profiles (members) ----
+export async function getProfiles(): Promise<Profile[]> {
+  const { data, error } = await sb().from('profiles').select('data')
+  if (error) throw error
+  return rows<Profile>(data)
+}
+
+// ---- project membership ----
+export async function getAllProjectMembers(): Promise<ProjectMember[]> {
+  const { data, error } = await sb().from('project_members').select('project_id, user_id, created_at')
+  if (error) throw error
+  return (data ?? []).map((r) => ({
+    projectId: r.project_id as string,
+    userId: r.user_id as string,
+    createdAt: new Date(r.created_at as string).getTime(),
+  }))
+}
+export async function addProjectMember(projectId: ID, userId: ID) {
+  const { error } = await sb()
+    .from('project_members')
+    .upsert({ project_id: projectId, user_id: userId }, { onConflict: 'project_id,user_id' })
+  if (error) throw error
+}
+export async function removeProjectMember(projectId: ID, userId: ID) {
+  const { error } = await sb()
+    .from('project_members')
+    .delete()
+    .eq('project_id', projectId)
+    .eq('user_id', userId)
+  if (error) throw error
+}
+
+// ---- notifications (recipient = current user, enforced by RLS) ----
+export async function getNotifications(userId: ID, limit = 50): Promise<AppNotification[]> {
+  const { data, error } = await sb()
+    .from('notifications')
+    .select('data')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return rows<AppNotification>(data)
+}
+export async function markNotificationRead(id: ID) {
+  const { data: row } = await sb().from('notifications').select('data').eq('id', id).maybeSingle()
+  const n = row?.data as AppNotification | undefined
+  if (!n) return
+  const updated = { ...n, read: true }
+  const { error } = await sb().from('notifications').update({ data: updated, read: true }).eq('id', id)
+  if (error) throw error
+}
+export async function markAllNotificationsRead(userId: ID) {
+  // fetch unread, flip them (jsonb `data` mirrors the `read` column)
+  const { data } = await sb()
+    .from('notifications')
+    .select('id, data')
+    .eq('user_id', userId)
+    .eq('read', false)
+  for (const r of data ?? []) {
+    const n = r.data as AppNotification
+    await sb().from('notifications').update({ data: { ...n, read: true }, read: true }).eq('id', r.id)
+  }
 }
 
 // ---- wipe the shared workspace (reset button) ----

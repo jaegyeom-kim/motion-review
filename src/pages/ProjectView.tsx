@@ -17,6 +17,9 @@ import { UploadDialog } from '../components/UploadDialog'
 import { Modal } from '../components/Modal'
 import { ExportProgress } from '../components/ExportProgress'
 import { AssetThumb, KindGlyph } from '../components/AssetThumb'
+import { NotificationBell } from '../components/NotificationBell'
+import { AccountMenu } from '../components/AccountMenu'
+import { requireAuth } from '../lib/supabase'
 import {
   IconPlus,
   IconTrash,
@@ -276,6 +279,12 @@ export function ProjectView() {
         <button className="btn primary" onClick={() => setShowUpload(true)}>
           <IconPlus size={16} /> 새 애셋
         </button>
+        {requireAuth && (
+          <>
+            <NotificationBell />
+            <AccountMenu />
+          </>
+        )}
       </div>
 
       <div className="proj-body">

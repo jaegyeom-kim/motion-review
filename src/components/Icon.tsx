@@ -190,3 +190,28 @@ export const IconMore = ({ size = 18, className }: P) => (
     <circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none" />
   </svg>
 )
+export const IconBell = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+  </svg>
+)
+export const IconUser = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
+  </svg>
+)
+export const IconLogout = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <path d="M16 17l5-5-5-5" />
+    <path d="M21 12H9" />
+  </svg>
+)
+export const IconShield = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />
+    <path d="M9 12l2 2 4-4" />
+  </svg>
+)

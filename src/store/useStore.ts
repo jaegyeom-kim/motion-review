@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { Session } from '@supabase/supabase-js'
 import type {
   Asset,
   AssetStatus,
@@ -10,50 +11,24 @@ import type {
   Project,
   ID,
   Reply,
+  Profile,
+  ProjectMember,
+  AppNotification,
+  Role,
 } from '../types'
 import * as db from '../lib/backend'
-import { supabase, cloudEnabled } from '../lib/supabase'
+import * as cloud from '../lib/cloud'
+import * as auth from '../lib/auth'
+import { supabase, cloudEnabled, requireAuth } from '../lib/supabase'
 import { newId } from '../lib/ids'
 import { renderThumbnail, cloneAnimationData } from '../lib/lottie'
 import { parseMedia } from '../lib/media'
 import { makeDemoLottie } from '../lib/demoLottie'
 import { makeDemoPosterSvg } from '../lib/demoMedia'
+import { BRANCH_COLORS, IDENTITY_COLORS, PROJECT_COLORS } from '../lib/identityColors'
 
-export const BRANCH_COLORS = [
-  '#7c6cff',
-  '#3ad1c4',
-  '#ff7a59',
-  '#ffc24b',
-  '#5b9bff',
-  '#ff6b9d',
-  '#9bd35a',
-]
-
-/** Palette a commenter picks their bubble color from. */
-export const IDENTITY_COLORS = [
-  '#7c6cff',
-  '#3ad1c4',
-  '#ff7a59',
-  '#ffc24b',
-  '#5b9bff',
-  '#ff6b9d',
-  '#9bd35a',
-  '#c98aff',
-  '#ff5c6c',
-  '#4ad0e0',
-]
-
-/** Accent palette for project cards. */
-export const PROJECT_COLORS = [
-  '#7c6cff',
-  '#3ad1c4',
-  '#ff7a59',
-  '#ffc24b',
-  '#5b9bff',
-  '#ff6b9d',
-  '#9bd35a',
-  '#c98aff',
-]
+// Re-export the shared palettes so existing import sites keep working.
+export { BRANCH_COLORS, IDENTITY_COLORS, PROJECT_COLORS }
 
 const IDENTITY_KEY = 'lc-identity'
 
@@ -88,6 +63,14 @@ interface State {
   author: string
   authorColor: string
 
+  // auth (cloud + auth mode)
+  authReady: boolean
+  session: Session | null
+  profile: Profile | null
+  members: Profile[]
+  projectMembers: ProjectMember[]
+  notifications: AppNotification[]
+
   // global
   projects: Project[]
   assets: Asset[]
@@ -113,6 +96,18 @@ interface State {
 
   // identity
   setIdentity: (name: string, color: string) => void
+
+  // auth
+  initAuth: () => void
+  onSession: (session: Session | null) => Promise<void>
+  signOut: () => Promise<void>
+  refreshMembers: () => Promise<void>
+  setMemberRole: (userId: ID, role: Role) => Promise<void>
+  assignMember: (projectId: ID, userId: ID) => Promise<void>
+  unassignMember: (projectId: ID, userId: ID) => Promise<void>
+  loadNotifications: () => Promise<void>
+  markNotifRead: (id: ID) => Promise<void>
+  markAllNotifsRead: () => Promise<void>
 
   // lifecycle
   init: () => Promise<void>
@@ -179,10 +174,20 @@ const now = () => Date.now()
 let initOnce: Promise<void> | null = null
 // Single shared realtime channel (cloud mode).
 let rtChannel: ReturnType<NonNullable<typeof supabase>['channel']> | null = null
+// Per-user notifications realtime channel (auth mode).
+let notifChannel: ReturnType<NonNullable<typeof supabase>['channel']> | null = null
+// Guards initAuth against StrictMode double-invoke.
+let authStarted = false
 
 export const useStore = create<State>((set, get) => ({
   ready: false,
   ...loadIdentity(),
+  authReady: false,
+  session: null,
+  profile: null,
+  members: [],
+  projectMembers: [],
+  notifications: [],
   projects: [],
   assets: [],
   currentProjectId: null,
@@ -207,6 +212,146 @@ export const useStore = create<State>((set, get) => ({
     } catch {
       /* ignore */
     }
+    // In auth mode, the display name/color live on the profile too.
+    const { profile } = get()
+    if (requireAuth && profile) {
+      const updated: Profile = { ...profile, name: author, color }
+      set((s) => ({
+        profile: updated,
+        members: s.members.map((m) => (m.id === updated.id ? updated : m)),
+      }))
+      void auth.updateProfile(updated).catch(() => {})
+    }
+  },
+
+  // ---- auth ----
+  initAuth: () => {
+    // Local or anonymous-cloud mode: no auth gate — load data straight away.
+    if (!requireAuth) {
+      set({ authReady: true })
+      void get().init()
+      return
+    }
+    if (authStarted) return
+    authStarted = true
+    // React to login / logout / refresh, then resolve the initial session.
+    // App-lifetime listener — no need to retain the unsubscribe handle.
+    auth.onAuthChange((session) => {
+      void get().onSession(session)
+    })
+    void auth.getSession().then((session) => get().onSession(session))
+  },
+
+  onSession: async (session) => {
+    const prevId = get().session?.user.id ?? null
+    const nextId = session?.user.id ?? null
+
+    if (!session) {
+      // logged out — tear down workspace + realtime, show the login screen.
+      if (notifChannel && supabase) {
+        void supabase.removeChannel(notifChannel)
+        notifChannel = null
+      }
+      if (rtChannel && supabase) {
+        void supabase.removeChannel(rtChannel)
+        rtChannel = null
+      }
+      initOnce = null
+      set({
+        session: null,
+        profile: null,
+        members: [],
+        projectMembers: [],
+        notifications: [],
+        projects: [],
+        assets: [],
+        ready: false,
+        authReady: true,
+      })
+      return
+    }
+
+    // Same session re-emitted (e.g. token refresh) — nothing to reload.
+    if (prevId === nextId && get().profile) {
+      set({ session })
+      return
+    }
+
+    const profile = await auth.ensureProfile(session)
+    set({
+      session,
+      profile,
+      author: profile.name,
+      authorColor: profile.color,
+      authReady: true,
+    })
+    await get().init()
+    await Promise.all([get().refreshMembers(), get().loadNotifications()])
+    get().startRealtime()
+    startNotifRealtime(set, get)
+  },
+
+  signOut: async () => {
+    await auth.signOut()
+    // onAuthChange fires with null → onSession tears everything down.
+  },
+
+  refreshMembers: async () => {
+    if (!requireAuth) return
+    const [members, projectMembers] = await Promise.all([
+      cloud.getProfiles(),
+      cloud.getAllProjectMembers(),
+    ])
+    set({ members, projectMembers })
+  },
+
+  setMemberRole: async (userId, role) => {
+    const m = get().members.find((x) => x.id === userId)
+    if (!m) return
+    const updated: Profile = { ...m, role }
+    await auth.updateProfile(updated)
+    set((s) => ({
+      members: s.members.map((x) => (x.id === userId ? updated : x)),
+      profile: s.profile?.id === userId ? updated : s.profile,
+    }))
+  },
+
+  assignMember: async (projectId, userId) => {
+    await cloud.addProjectMember(projectId, userId)
+    set((s) =>
+      s.projectMembers.some((pm) => pm.projectId === projectId && pm.userId === userId)
+        ? {}
+        : { projectMembers: [...s.projectMembers, { projectId, userId, createdAt: now() }] },
+    )
+  },
+
+  unassignMember: async (projectId, userId) => {
+    await cloud.removeProjectMember(projectId, userId)
+    set((s) => ({
+      projectMembers: s.projectMembers.filter(
+        (pm) => !(pm.projectId === projectId && pm.userId === userId),
+      ),
+    }))
+  },
+
+  loadNotifications: async () => {
+    const uid = get().session?.user.id
+    if (!uid) return
+    set({ notifications: await cloud.getNotifications(uid) })
+  },
+
+  markNotifRead: async (id) => {
+    set((s) => ({
+      notifications: s.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
+    }))
+    await cloud.markNotificationRead(id).catch(() => {})
+  },
+
+  markAllNotifsRead: async () => {
+    const uid = get().session?.user.id
+    if (!uid) return
+    set((s) => ({ notifications: s.notifications.map((n) => ({ ...n, read: true })) }))
+    await cloud.markAllNotificationsRead(uid).catch(() => {})
   },
 
   init: async () => {
@@ -824,7 +969,7 @@ export const useStore = create<State>((set, get) => ({
   setDraftPin: (d) => set({ draftPin: d }),
 
   addComment: async (input) => {
-    const { currentVersionId, currentAssetId, author, authorColor } = get()
+    const { currentVersionId, currentAssetId, author, authorColor, session } = get()
     if (!currentVersionId || !currentAssetId) return
     const t = now()
     const comment: Comment = {
@@ -841,6 +986,7 @@ export const useStore = create<State>((set, get) => ({
       tag: input.tag,
       status: 'open',
       author,
+      authorId: session?.user.id,
       authorColor,
       createdAt: t,
       updatedAt: t,
@@ -882,6 +1028,7 @@ export const useStore = create<State>((set, get) => ({
     const reply: Reply = {
       id: newId('rep'),
       author: get().author,
+      authorId: get().session?.user.id,
       authorColor: get().authorColor,
       body,
       createdAt: now(),
@@ -905,6 +1052,33 @@ export const useStore = create<State>((set, get) => ({
 }))
 
 // ---- helpers ----
+type SetFn = (updater: (s: State) => Partial<State>) => void
+
+/** Subscribe to the current user's notification inserts so the bell + toaster
+ *  update live (auth mode). Filtered server-side by user_id. */
+function startNotifRealtime(set: SetFn, get: () => State) {
+  if (!requireAuth || !supabase || notifChannel) return
+  const uid = get().session?.user.id
+  if (!uid) return
+  notifChannel = supabase
+    .channel(`notif-${uid}`)
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` },
+      (payload) => {
+        const row = payload.new as { data?: AppNotification }
+        const n = row?.data
+        if (!n) return
+        set((s) =>
+          s.notifications.some((x) => x.id === n.id)
+            ? {}
+            : { notifications: [n, ...s.notifications] },
+        )
+      },
+    )
+    .subscribe()
+}
+
 function latestOnBranch(versions: Version[], branchId: ID | null): Version | null {
   if (!branchId) return null
   const onBranch = versions

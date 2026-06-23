@@ -7,6 +7,9 @@ import { fmtRelative } from '../lib/labels'
 import { importBundle } from '../lib/bundle'
 import { Modal } from '../components/Modal'
 import { KindGlyph } from '../components/AssetThumb'
+import { NotificationBell } from '../components/NotificationBell'
+import { AccountMenu } from '../components/AccountMenu'
+import { requireAuth } from '../lib/supabase'
 import { IconPlus, IconTrash, IconUpload, IconFolder, IconMore } from '../components/Icon'
 
 export function ProjectsHome() {
@@ -53,6 +56,12 @@ export function ProjectsHome() {
         <button className="btn primary" onClick={() => setShowNew(true)}>
           <IconPlus size={16} /> 새 프로젝트
         </button>
+        {requireAuth && (
+          <>
+            <NotificationBell />
+            <AccountMenu />
+          </>
+        )}
         <input
           ref={importRef}
           type="file"

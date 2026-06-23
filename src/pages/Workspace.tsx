@@ -23,6 +23,9 @@ import { CompareView } from '../components/CompareView'
 import { MediaCompare } from '../components/MediaCompare'
 import { VersionSelector } from '../components/VersionSelector'
 import { IdentityChip } from '../components/IdentityChip'
+import { NotificationBell } from '../components/NotificationBell'
+import { AccountMenu } from '../components/AccountMenu'
+import { requireAuth } from '../lib/supabase'
 import { UploadDialog } from '../components/UploadDialog'
 import { VerdictChip } from '../components/Badges'
 import { IconBack, IconBranch, IconCheck, IconCompare } from '../components/Icon'
@@ -375,7 +378,9 @@ export function Workspace() {
         )}
         <div className="spacer" />
 
+        {requireAuth && <NotificationBell />}
         <IdentityChip />
+        {requireAuth && <AccountMenu />}
         <select
           className="asset-status-select"
           value={asset.status}

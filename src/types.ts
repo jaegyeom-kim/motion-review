@@ -156,6 +156,8 @@ export interface Version {
 export interface Reply {
   id: ID
   author: string
+  /** auth.users id of the reply author (cloud+auth mode) — for notifications. */
+  authorId?: ID
   /** the reply author's chosen bubble color (hex). */
   authorColor: string
   body: string
@@ -180,6 +182,9 @@ export interface Comment {
   tag: CommentTag
   status: CommentStatus
   author: string
+  /** auth.users id of the author (cloud+auth mode) — used for notification
+   *  targeting + participant lookup. Absent for anonymous/local comments. */
+  authorId?: ID
   /** the author's chosen bubble color (hex) — colors the canvas pin + badge. */
   authorColor: string
   createdAt: number
@@ -187,6 +192,53 @@ export interface Comment {
   /** set when the same note is confirmed fixed in a later version. */
   resolvedInVersionId?: ID
   replies: Reply[]
+}
+
+// ============================================================================
+// Accounts, membership, notifications (cloud + auth mode only)
+// ============================================================================
+
+/** App-level role. Admins manage members + project assignments. */
+export type Role = 'admin' | 'member'
+
+/** A registered account, mirroring an auth.users row plus app metadata.
+ *  `id` is the Supabase auth uid (uuid). */
+export interface Profile {
+  id: ID
+  email: string
+  name: string
+  role: Role
+  /** chosen bubble/identity color (hex). */
+  color: string
+  createdAt: number
+}
+
+/** Assigns a profile to a project. Drives notification targeting (members of a
+ *  project get notified about its comments) and admin organization. */
+export interface ProjectMember {
+  projectId: ID
+  userId: ID
+  createdAt: number
+}
+
+export type NotificationType = 'comment' | 'reply' | 'mention'
+
+/** An in-app notification row (one per recipient). Also mirrored to email. */
+export interface AppNotification {
+  id: ID
+  /** recipient auth uid. */
+  userId: ID
+  type: NotificationType
+  title: string
+  body: string
+  /** deep-link targets. */
+  assetId?: ID
+  projectId?: ID
+  commentId?: ID
+  /** display name of who triggered it. */
+  actor?: string
+  read: boolean
+  createdAt: number
 }
 
 /** The heavy media payload for a version, in its own object store keyed by
